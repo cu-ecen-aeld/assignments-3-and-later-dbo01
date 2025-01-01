@@ -2,7 +2,7 @@
 
 if [ $# -lt 2 ]
 then
-	echo "Invalid numer of arguments, expected 2, have $#"
+	echo "Invalid numer of arguments, expected 2, have $# !"
 	exit 1
 fi
 
@@ -19,3 +19,4 @@ else
 	echo " ${filesdir} is not recognized as directory, please provide directory to search"
 	exit 1
 fi
+
