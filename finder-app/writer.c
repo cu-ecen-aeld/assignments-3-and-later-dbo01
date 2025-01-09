@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 		{
 			syslog(LOG_DEBUG, "Writing %s to %s", str_content, f_name );
 
-        	fp = fopen(f_name ,"w");
+			fp = fopen(f_name ,"w");
 
 			if ( fp != NULL)
 			{
@@ -43,14 +43,10 @@ int main(int argc, char **argv)
 			}
 			else
 			{
+				syslog(LOG_DEBUG, "File Creation failed" );
 				return 1;
 			}
 
 		}
 	}
-
-
-
-
-	printf("writer done\n");
 }
