@@ -1,4 +1,10 @@
 #include "systemcalls.h"
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -17,7 +23,17 @@ bool do_system(const char *cmd)
  *   or false() if it returned a failure
 */
 
-    return true;
+    int ret = system(cmd);
+
+    if (ret  ==  0)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+
 }
 
 /**
@@ -40,6 +56,9 @@ bool do_exec(int count, ...)
     va_start(args, count);
     char * command[count+1];
     int i;
+
+    // char* arg_arr[count];
+
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
@@ -47,7 +66,17 @@ bool do_exec(int count, ...)
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    // command[count] = command[count];
+
+    for(i=1; i<count; i++)
+    {
+        /* Check if absolute path was provided when argument is program name*/
+        if (command[i][0] != '/' && command[i][0] != '-')
+        {
+            return false;
+        }
+    }
+
 
 /*
  * TODO:
@@ -58,6 +87,31 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    pid_t pid = fork();
+    int child_sts;
+
+    if (pid == 0)
+    {
+        execv(command[0], (char * const*)&command[1]);
+        return false;
+    }
+    else if (pid > 0)
+    {
+        wait(&child_sts);
+
+        if(WIFEXITED(child_sts))
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    else
+    {
+        return false;
+    }
 
     va_end(args);
 
@@ -82,9 +136,17 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    // command[count] = command[count];
 
 
+    for(i=1; i<count; i++)
+    {
+        /* Check if absolute path was provided when argument is program name*/
+        if (command[i][0] != '/' && command[i][0] != '-')
+        {
+            return false;
+        }
+    }
 /*
  * TODO
  *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
@@ -93,7 +155,44 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *
 */
 
+int kidpid;
+int child_sts;
+int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+
+if (fd < 0) { perror("open"); return false; }
+
+switch (kidpid = fork()) {
+  case -1:
+    /* error creating new process*/
+    perror("fork"); return false;
+
+  case 0:
+    /* child operations */
+    if (dup2(fd, 1) < 0) { perror("dup2"); return false; }
+    unsetenv("SHELL");
+    clearenv();
+    execv(command[0], (char * const*)&command[1]);
+    close(fd);
+    return false;
+
+  default:
+    /* Parent operations */
+
+    wait(&child_sts);
+
+    if(WIFEXITED(child_sts))
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+    close(fd);
+
+}
     va_end(args);
 
     return true;
+
 }
