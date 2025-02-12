@@ -109,13 +109,13 @@ cp "${SYSROOT}/lib64/libc.so.6" "${OUTDIR}/rootfs/lib64"
     sudo mknod -m 600 dev/console c 5 1
 
 # TODO: Clean and build the writer utility
-    make clean -C /home/dariusz/assignment-1-dbo01/finder-app/
-    make CROSS_COMPILE=aarch64-none-linux-gnu- -C /home/dariusz/assignment-1-dbo01/finder-app/
+    make -C ${FINDER_APP_DIR} clean
+    make -C ${FINDER_APP_DIR} CROSS_COMPILE=${CROSS_COMPILE}
 
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
-    cp -r /home/dariusz/assignment-1-dbo01/finder-app/. ${OUTDIR}/rootfs/home
-    cp -a /home/dariusz/assignment-1-dbo01/finder-app/conf/. ${OUTDIR}/rootfs/home
+    cp -r "${FINDER_APP_DIR}/." ${OUTDIR}/rootfs/home
+    cp -a "${FINDER_APP_DIR}/conf/." ${OUTDIR}/rootfs/home
 # TODO: Chown the root directory
     cd ${OUTDIR}/rootfs/
     sudo chown -R root:root *
