@@ -11,8 +11,6 @@
 #define ERROR_LOG(msg,...) printf("threading ERROR: " msg "\n" , ##__VA_ARGS__)
 
 
-
-/* msleep(): Sleep for the requested number of milliseconds. */
 int msleep(long msec)
 {
     struct timespec ts;
@@ -27,9 +25,9 @@ int msleep(long msec)
     ts.tv_sec = msec / 1000;
     ts.tv_nsec = (msec % 1000) * 1000000;
 
-    // do {
+    do {
         res = nanosleep(&ts, &ts);
-    // } while (res && errno == EINTR);
+    } while (res && errno == EINTR);
 
     return res;
 }
@@ -42,9 +40,9 @@ void* threadfunc(void* thread_param)
     int rc = 0;
     thread_func_args->thread_complete_success =  true;
 
-    msleep(thread_func_args->wait_to_obtain_ms);
+    rc = msleep(thread_func_args->wait_to_obtain_ms);
 
-    rc = pthread_mutex_lock(thread_func_args->mutex);
+    rc |= pthread_mutex_lock(thread_func_args->mutex);
 
     if (rc != 0 )
     {
@@ -52,9 +50,9 @@ void* threadfunc(void* thread_param)
         return thread_param;
     }
 
-    msleep(thread_func_args->wait_to_release_ms);
+    rc = msleep(thread_func_args->wait_to_release_ms);
 
-    rc = pthread_mutex_unlock(thread_func_args->mutex);
+    rc |= pthread_mutex_unlock(thread_func_args->mutex);
 
     if (rc != 0 )
     {
@@ -66,6 +64,16 @@ void* threadfunc(void* thread_param)
 }
 
 
+/*  
+    *
+    * TODO: allocate memory for thread_data, setup mutex and wait arguments, pass thread_data to created thread
+    * using threadfunc() as entry point.
+    *
+    * return true if successful.
+    *
+    * See implementation details in threading.h file comment block
+*/
+    
 bool start_thread_obtaining_mutex(pthread_t *thread, pthread_mutex_t *mutex,int wait_to_obtain_ms, int wait_to_release_ms)
 {
 
@@ -85,16 +93,5 @@ bool start_thread_obtaining_mutex(pthread_t *thread, pthread_mutex_t *mutex,int 
 
     if (rc != 0 ) return false;
 
-    // free(p_thread_data);
-
-
-    /**
-     * TODO: allocate memory for thread_data, setup mutex and wait arguments, pass thread_data to created thread
-     * using threadfunc() as entry point.
-     *
-     * return true if successful.
-     *
-     * See implementation details in threading.h file comment block
-     */
     return true;
 }
