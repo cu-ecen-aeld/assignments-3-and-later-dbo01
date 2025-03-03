@@ -20,8 +20,8 @@
 #define PORT "9000"  // the port users will be connecting to
 
 #define BACKLOG 10   // how many pending connections queue will hold
-#define MAXDATASIZE 20000
-#define MAX_READ_SIZE 1000
+#define MAXDATASIZE 20000 // max internal buffer size
+#define MAX_READ_SIZE 1000 // chink of data to process (read/send)
 bool rx_done = false;
 
 void sig_handler(int s)
@@ -30,8 +30,6 @@ void sig_handler(int s)
     rx_done = true;
     printf("\n server: exiting on signal \n");
     remove("/var/tmp/aesdsocketdata");
-    // close(sockfd);
-    // close(new_fd);
 }
 
 
@@ -45,7 +43,7 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
     int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
     struct addrinfo hints, *servinfo, *p;
@@ -56,23 +54,24 @@ int main(void)
     char s[INET6_ADDRSTRLEN];
     int rv;
     char buf[MAXDATASIZE];
-
+    int status;
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE; // use my 
+    hints.ai_flags = AI_PASSIVE; // use my
     int numbytes;
     uint rec_size = 0;
     size_t read_b = 0;
     // creating file pointer to work with files
     FILE *fptr;
 
+    fprintf(stderr, "server: argc = %d\n", argc);
 
     openlog(NULL, 0, LOG_USER);
 
     if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-        return 1;
+        return -1;
     }
 
     // loop through all the results and bind to the first we can
@@ -86,7 +85,7 @@ int main(void)
         if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes,
                 sizeof(int)) == -1) {
             perror("setsockopt");
-            exit(1);
+            exit(-1);
         }
 
         if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
@@ -102,31 +101,50 @@ int main(void)
 
     if (p == NULL)  {
         fprintf(stderr, "server: failed to bind\n");
-        exit(1);
+        exit(-1);
+    }
+
+    if (argc > 1)
+    {
+        int pid = fork();
+        if (pid == -1)
+        {
+            perror("fork");
+            exit(-1);
+        }
+        else if (pid == 0)
+        {
+            fprintf(stderr, "server: child created \n");
+        }
+        else // main server
+        {
+            return 0;
+        }
     }
 
     if (listen(sockfd, BACKLOG) == -1) {
         perror("listen");
-        exit(1);
+        exit(-1);
     }
 
     sa.sa_handler = sig_handler;
     sigemptyset(&sa.sa_mask);
-    // sa.sa_flags = SA_RESTART;
+    sa.sa_flags = 0;
     if (sigaction((SIGINT) , &sa, NULL) == -1) {
         perror("SIGINT");
-        exit(1);
+        exit(-1);
     }
     if (sigaction((SIGTERM) , &sa, NULL) == -1) {
         perror("SIGTERM");
-        exit(1);
+        exit(-1);
     }
 
     printf("server: waiting for connections...\n");
 
-    while(1 && !rx_done) {  // main accept() loop
+
+
+    while(!rx_done) {  // main accept() loop
         sin_size = sizeof their_addr;
-        // rx_done = false;
         new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
         if (new_fd == -1) {
             perror("accept");
@@ -141,10 +159,10 @@ int main(void)
 
         printf("server: got connection from %s\n", s);
 
-        // opening file in writing mode
         fptr = fopen("/var/tmp/aesdsocketdata", "a+");
         perror("fptr");
 
+        // receiving loop
         while (true)
         {
             if ((numbytes = recv(new_fd, &buf[rec_size], MAX_READ_SIZE-1, 0)) == -1) {
@@ -158,16 +176,15 @@ int main(void)
             if (buf[rec_size-1] == '\n')
             {
                 fwrite(buf , sizeof(char), rec_size, fptr);
-                // fprintf(fptr, "\n", buf);
                 printf("server: saving %d bytes \n", numbytes);
                 fflush(fptr);
                 memset(buf, 0, sizeof(buf));
                 rec_size = 0;
-
                 fseek(fptr, 0, SEEK_SET);
+
+                // sending loop
                 while (true)
                 {
-
                     read_b = fread( buf, sizeof( char ), MAX_READ_SIZE, fptr );
 
                     if (read_b == 0)
@@ -185,11 +202,10 @@ int main(void)
                     }
                 }
 
-                syslog(LOG_INFO, "Closed connection from XXX %s\n", s );
+                syslog(LOG_INFO, "Closed connection from %s\n", s );
+                printf("server: client disconnected  %s \n", s);
 
-                // close(sockfd);
-                close(new_fd);  // parent doesn't need this
-                // rx_done = true;
+                close(new_fd);
                 fclose(fptr);
                 break;
 
@@ -197,7 +213,7 @@ int main(void)
             else if (0 == numbytes)
             {
                 // rx_done = true;
-                syslog(LOG_INFO, "Closed connection from XXX %s\n", s );
+                syslog(LOG_INFO, "Closed connection from %s\n", s );
                 printf("server: received  %d bytes \n", numbytes);
                 break;
             }
@@ -205,16 +221,11 @@ int main(void)
             {
                 printf("server: received  %d bytes, waiting for more ... \n", numbytes);
             }
-
-            // if (!fork()) { // this is the child process
-            //     close(sockfd); // child doesn't need the listener
-            //     if (send(new_fd, "Hello, world!", 13, 0) == -1)
-            //         perror("send");
-            //     close(new_fd);
-            //     exit(0);
-            // }
-
         }
+
     }
+    printf("server: Shuting down \n");
+    close(sockfd);
+    close(new_fd);
     return 0;
 }
